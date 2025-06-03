@@ -1,0 +1,51 @@
+# === Python-related ignores ===
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode and other IDE/editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Log and temporary files
+*.log
+*.tmp
+*.bak
+*.ipynb
+*.txt
+*.out
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Ignore TCGA-BRCA folder and all subfolders/files
+TCGA-BRCA/
+
+log/
+results/
+TCGA-mini/
+hide/
+data/
+prov-gigapath/
+
+ImageCropTileFilter.py
+image_specs.py
+script_def.py
+test.yml
