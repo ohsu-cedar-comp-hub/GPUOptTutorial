@@ -11,5 +11,5 @@ source activate base
 conda init zsh
 conda activate gigapath
 
-python mini_script_error.py -id TCGA-BRCA/TCGA-BRCA-batch_test -hf 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 -lf log/TCGA-BRCA/TCGA-BRCA-test -o results/
+python scripts/mini_script_error.py -id TCGA-BRCA/TCGA-BRCA-batch_test -hf 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 -lf log/TCGA-BRCA/TCGA-BRCA-test -o results/
 

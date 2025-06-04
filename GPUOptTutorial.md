@@ -38,7 +38,6 @@ git clone https://github.com/ohsu-cedar-comp-hub/GPUOptTutorial.git
 cd gpu_opt
 ```
 
-
 Confirm that your current working directory is the gpu_opt directory. 
 
 Now, we will set up the correct environment: 
@@ -47,7 +46,7 @@ Follow install instructions from gigapath github README. https://github.com/prov
 
 Then run this block of code below, making sure to install everything in the same gigapath environment.
 
-(You may be able to skip uninstalling and reinstalling torch if you didn’t run into any issues installing gigapath from github). 
+(You may be able to skip uninstalling and reinstalling torch modules if you didn’t run into any issues installing gigapath from github). 
 
 ```
 pip uninstall torch torchvision torchaudio
@@ -59,6 +58,18 @@ conda install anaconda::tifffile
 pip install tiler
 
 ```
+
+#### **Pulling the Data** 
+For this tutorial, we will be using 2 batches of 2 BRCA images with each image being 15k x 15k pixels. 
+Batch 1 is titled TCGA_BRCA-batch_1. Batch 2 is titled TCGA_BRCA-batch_2. 
+
+Pull the data by creating a symbolic link. 
+
+```
+cd gpu_opt
+ln -s /home/exacloud/gscratch/CEDAR/chaoe/gpu_opt/TCGA-BRCA .
+```
+
 
 #### **Launching the Tutorial**
 
@@ -73,7 +84,7 @@ Our launch script is titled launch.sh. We will use these already present sbatch 
 #SBATCH --cpus-per-task 1
 #SBATCH --mem 20G
 #SBATCH --time 1:00:00
-#SBATCH --job-name tile_run_gpu
+#SBATCH --job-name gpu_opt_tut
 ```
 
 Here we are requesting 1 a40 GPU, 1 CPU, 20G of memory and setting a time limit of 1 hour. We also set up a job array of 2 tasks and we want both to run in parallel. 
@@ -81,7 +92,7 @@ Here we are requesting 1 a40 GPU, 1 CPU, 20G of memory and setting a time limit 
 Inside the launch script, we will call the following: 
 
 ```bash
-python script.py -id TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -hf 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 -lf log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}.log -o results/
+python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -hf 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 -lf log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -o results/ $CACHE_ARG
 ```
 
 We are running the script (script.py) with its required arguments:  
@@ -92,13 +103,19 @@ The hugging face token (-hf) is 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.
 
 I’ve also set the path for my log files (-lf) as log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}.log. 
 
-Lastly, I’ve set an output directory in results/ . 
+I’ve also set an output directory in results/ . 
+
+Lastly, there is a cache argument that can be filled in if it is provided during launch of the shell script. This is for the location of the HuggingFace cache. Through my testing, I like to use a cache directory in my gscratch. If you leave it blank, it will just go to your default which is at RDS! 
+
+TIP: Want to see more information regarding why I put HF cache in gscratch? Move to [**Changing Location of Cache** ](#changing-location-of-cache)
 
 TIP: Want a more detailed breakdown of what’s happening in script.py? Move to [**Detailed Breakdown of Script (script.py)** ](#detailed-breakdown-of-script-scriptpy). 
 
+
 Now, we will launch the job array by running this command: 
 
-`sbatch launch.sh` 
+`sbatch scripts/launch.sh [insert cache location here if desired]` . 
+
 
 After launching, you can confirm that the job array is functioning properly by using `squeue` and checking the log file. 
 
@@ -152,53 +169,53 @@ This tool is also useful to keep track of how much time the job took (via Elapse
 
 INPUT: Path to Directory of Whole Slide Images (.svs), Hugging Face Token, Path to Log File, Path to Results Directory 
 
-For each image in the image directory: 
+    For each image in the image directory: 
 
-New ImageCropTileFilter object is created. 
+        New ImageCropTileFilter object is created. 
 
-- Image is read in using Tifffile library.
-- Time taken to read image is printed to log file.
-- Obtain information of the cancer type, image file name, sub id etc from the image file name.
+        - Image is read in using Tifffile library.
+        - Time taken to read image is printed to log file.
+        - Obtain information of the cancer type, image file name, sub id etc from the image file name.
 
-Load the gigapath model using the hugging face token. 
+        Load the gigapath model using the hugging face token. 
 
-- Time taken to load model is printed to log file.
-- Explicitly set torch device to cuda.
-- Create an array of transformations to be applied later
-    - resize image so shorter side is 256 pixels
-    - crops a 224 x 224 square from image’s center
-    - converts image into PyTorch tensor
-    - normalizes RGB using predetermined mean and standard deviation
+        - Time taken to load model is printed to log file.
+        - Explicitly set torch device to cuda.
+        - Create an array of transformations to be applied later
+            - resize image so shorter side is 256 pixels
+            - crops a 224 x 224 square from image’s center
+            - converts image into PyTorch tensor
+            - normalizes RGB using predetermined mean and standard deviation
 
-Crop the image to ensure its dimensions are divisible by 256. 
+        Crop the image to ensure its dimensions are divisible by 256. 
 
-Tile the image into 256 x 256 tiles. 
+        Tile the image into 256 x 256 tiles. 
 
-For each tile: 
+        For each tile: 
 
-Record the tile’s position coordinates in the image. 
+            Record the tile’s position coordinates in the image. 
 
-Record the number of unique pixel values in the tile and their occurrences as an array. 
+            Record the number of unique pixel values in the tile and their occurrences as an array. 
 
-Calculate the 5th percentile and 50th percentile of pixel values. 
+            Calculate the 5th percentile and 50th percentile of pixel values. 
 
-Filter the tile based on if it’s likely to be background or if it has the tissue: 
+            Filter the tile based on if it’s likely to be background or if it has the tissue: 
 
-If likely tissue aka has lots of contrast, tile must pass these conditions: 
+            If likely tissue aka has lots of contrast, tile must pass these conditions: 
 
-- smallest unique pixel value < 135 (some dark pixels)
-- largest unique pixel value ≥ 255 (some bright pixels)
-- 5th percentile is < 162 and 50th percentile < 225 (not too bright/washed out)
+            - smallest unique pixel value < 135 (some dark pixels)
+            - largest unique pixel value ≥ 255 (some bright pixels)
+            - 5th percentile is < 162 and 50th percentile < 225 (not too bright/washed out)
 
-Tile marked as tissue is converted into PIL Image object. 
+            Tile marked as tissue is converted into PIL Image object. 
 
-Array of transformations is applied and tile becomes an RGB image. 
+            Array of transformations is applied and tile becomes an RGB image. 
 
-Tile is ran through gigapath model. 
+            Tile is ran through gigapath model. 
 
-The output (slide-level embeddings) and metadata of tile is saved to a dataframe in the results directory. 
+            The output (slide-level embeddings) and metadata of tile is saved to a dataframe in the results directory. 
 
-If likely background, tile is ignored and not saved. 
+            If likely background, tile is ignored and not saved. 
 
 OUTPUT: Log File, Dataframe of Processed (Likely Tissue) Tiles 
 
@@ -210,7 +227,7 @@ To demonstrate this, I’ve taken the original script and modified it slightly s
 
 I’m only using one image, with size of 5k x 5k as input as I expect this job to take a lot longer. 
 
-I launched using `sbatch mini_error.sh`
+I launched using `sbatch scripts/mini_error.sh`
 
 After submitting the job, confirming using `squeue`, I ran `watch nvidia-smi` to track GPU usage and as you can see below, no GPU was being utilized. 
 

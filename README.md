@@ -1,6 +1,6 @@
 # GPU Optimization Tutorial
 
-## PLEASE View full tutorial in GPUOptTutorial.md ! 
+## Please go to GPUOptTutorial.md to view the full tutorial on this!! 
 
 
 **Background**
