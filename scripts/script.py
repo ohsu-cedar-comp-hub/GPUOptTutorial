@@ -145,7 +145,6 @@ if __name__ == "__main__":
     # Parse arguments
     args = parser.parse_args()
 
-    print(args)
 
     
     hugging_face_token = args.hftoken

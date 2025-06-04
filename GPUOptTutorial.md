@@ -35,10 +35,10 @@ First, you will pull all the files from the GPU Opt github:
 
 ```
 git clone https://github.com/ohsu-cedar-comp-hub/GPUOptTutorial.git
-cd gpu_opt
+cd GPUOptTutorial
 ```
 
-Confirm that your current working directory is the gpu_opt directory. 
+Confirm that your current working directory is the GPUOptTutorial directory. 
 
 Now, we will set up the correct environment: 
 
@@ -66,7 +66,7 @@ Batch 1 is titled TCGA_BRCA-batch_1. Batch 2 is titled TCGA_BRCA-batch_2.
 Pull the data by creating a symbolic link. 
 
 ```
-cd gpu_opt
+cd GPUOptTutorial
 ln -s /home/exacloud/gscratch/CEDAR/chaoe/gpu_opt/TCGA-BRCA .
 ```
 
