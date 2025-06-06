@@ -1,9 +1,31 @@
-# GPU Optimization Tutorial
+# GPU Optimization Tutorial <!-- omit in toc -->
+
+**Table of Contents**
+- [**Introduction**](#introduction)
+    - [**Background**](#background)
+    - [**Getting Started**](#getting-started)
+    - [**Data Input**](#data-input)
+- [**Running the Tutorial**](#running-the-tutorial)
+    - [**Setting Up**](#setting-up)
+    - [**Pulling the Data**](#pulling-the-data)
+    - [**Launching the Tutorial**](#launching-the-tutorial)
+- [**Tracking and Optimizing the Jobs**](#tracking-and-optimizing-the-jobs)
+    - [**GPU Usage and Optimization**](#gpu-usage-and-optimization)
+    - [**CPU Usage and Optimization**](#cpu-usage-and-optimization)
+- [**Other Information**](#other-information)
+    - [**Detailed Breakdown of Script (script.py)**](#detailed-breakdown-of-script-scriptpy)
+    - [**Why nvidia-smi?**](#why-nvidia-smi)
+    - [**Using LegacyGPU Partition**](#using-legacygpu-partition)
+    - [**Changing Location of Cache**](#changing-location-of-cache)
+    - [**General Tips for Lazy Loading**](#general-tips-for-lazy-loading)
 
 
 ## **Introduction**
 
 #### **Background**
+
+
+
 
 This tutorial is based off of Layaa’s script that splits whole slide images (.svs) into 256 x 256 tiles. Tiles are assessed and those with poor contrast and variation (aka likely background) are filtered out. Remaining tiles’ embeddings and coordinates are ran through the pretrained GigaPath model which will output slide-level embeddings. These embeddings along with the tile’s position are captured in a tsv for future processing. 
 
@@ -69,6 +91,147 @@ Pull the data by creating a symbolic link.
 cd GPUOptTutorial
 ln -s /home/exacloud/gscratch/CEDAR/chaoe/gpu_opt/TCGA-BRCA .
 ```
+
+Now, this is what your file structure should look like when you run 
+```
+cd GPUOptTutorial
+tree
+```
+    .
+    ├── GPUOptTutorial.md
+    ├── README.md
+    ├── TCGA-BRCA -> /home/exacloud/gscratch/CEDAR/chaoe/gpu_opt/TCGA-BRCA
+    ├── assets
+    │   ├── example.png
+    │   ├── image1.png
+    │   ├── image10.png
+    │   ├── image11.png
+    │   ├── image12.png
+    │   ├── image13.png
+    │   ├── image14.png
+    │   ├── image15.png
+    │   ├── image2.png
+    │   ├── image3.png
+    │   ├── image4.png
+    │   ├── image5.png
+    │   ├── image6.png
+    │   ├── image7.png
+    │   ├── image8.png
+    │   └── image9.png
+    ├── prov-gigapath
+    │   ├── LICENSE
+    │   ├── README.md
+    │   ├── data
+    │   │   └── __init__.py
+    │   ├── dataset_csv
+    │   │   ├── PANDA
+    │   │   │   ├── PANDA.csv
+    │   │   │   ├── test_0.csv
+    │   │   │   ├── train_0.csv
+    │   │   │   └── val_0.csv
+    │   │   ├── mutation
+    │   │   │   └── LUAD-5-gene_TCGA.csv
+    │   │   └── pcam
+    │   │       └── pcam.csv
+    │   ├── demo
+    │   │   ├── 1_slide_mpp_check.py
+    │   │   ├── 2_tiling_demo.py
+    │   │   ├── 3_load_tile_encoder.py
+    │   │   ├── 4_load_slide_encoder.py
+    │   │   ├── gigapath_pca_visualization_timm.ipynb
+    │   │   └── run_gigapath.ipynb
+    │   ├── environment.yaml
+    │   ├── finetune
+    │   │   ├── datasets
+    │   │   │   ├── __init__.py
+    │   │   │   └── slide_datatset.py
+    │   │   ├── main.py
+    │   │   ├── metrics.py
+    │   │   ├── params.py
+    │   │   ├── task_configs
+    │   │   │   ├── mutation_5_gene.yaml
+    │   │   │   ├── panda.yaml
+    │   │   │   └── utils.py
+    │   │   ├── training.py
+    │   │   └── utils.py
+    │   ├── gigapath
+    │   │   ├── __init__.py
+    │   │   ├── classification_head.py
+    │   │   ├── pipeline.py
+    │   │   ├── pos_embed.py
+    │   │   ├── preprocessing
+    │   │   │   ├── __init__.py
+    │   │   │   ├── data
+    │   │   │   │   ├── __init__.py
+    │   │   │   │   ├── box_utils.py
+    │   │   │   │   ├── create_tiles_dataset.py
+    │   │   │   │   ├── foreground_segmentation.py
+    │   │   │   │   ├── slide_utils.py
+    │   │   │   │   └── tiling.py
+    │   │   │   └── preprocessing.md
+    │   │   ├── slide_encoder.py
+    │   │   └── torchscale
+    │   │       ├── __init__.py
+    │   │       ├── architecture
+    │   │       │   ├── __init__.py
+    │   │       │   ├── config.py
+    │   │       │   ├── decoder.py
+    │   │       │   ├── encoder.py
+    │   │       │   ├── encoder_decoder.py
+    │   │       │   ├── retnet.py
+    │   │       │   └── utils.py
+    │   │       ├── component
+    │   │       │   ├── __init__.py
+    │   │       │   ├── custom_dilated_attention.py
+    │   │       │   ├── custom_flash_attention.py
+    │   │       │   ├── custom_multihead_attention.py
+    │   │       │   ├── dilated_attention.py
+    │   │       │   ├── droppath.py
+    │   │       │   ├── embedding.py
+    │   │       │   ├── feedforward_network.py
+    │   │       │   ├── flash_attention.py
+    │   │       │   ├── gate_linear_unit.py
+    │   │       │   ├── multihead_attention.py
+    │   │       │   ├── multiscale_retention.py
+    │   │       │   ├── multiway_network.py
+    │   │       │   ├── relative_position_bias.py
+    │   │       │   ├── rms_norm.py
+    │   │       │   ├── utils.py
+    │   │       │   ├── xmoe
+    │   │       │   │   ├── __init__.py
+    │   │       │   │   ├── global_groups.py
+    │   │       │   │   ├── moe_layer.py
+    │   │       │   │   └── routing.py
+    │   │       │   └── xpos_relative_position.py
+    │   │       └── model
+    │   │           ├── BEiT3.py
+    │   │           ├── LongNet.py
+    │   │           ├── LongNetConfig.py
+    │   │           └── __init__.py
+    │   ├── gigapath.egg-info
+    │   │   ├── PKG-INFO
+    │   │   ├── SOURCES.txt
+    │   │   ├── dependency_links.txt
+    │   │   └── top_level.txt
+    │   ├── images
+    │   │   ├── 01581x_25327y.png
+    │   │   ├── 01581x_25583y.png
+    │   │   ├── GigaPath_embedding_visualization.png
+    │   │   ├── gigapath_overview.png
+    │   │   ├── prov_normal_000_1.png
+    │   │   └── prov_normal_000_1.pt
+    │   ├── linear_probe
+    │   │   └── main.py
+    │   ├── pyproject.toml
+    │   ├── requirements.txt
+    │   └── scripts
+    │       ├── run_panda.sh
+    │       └── run_pcam.sh
+    └── scripts
+        ├── launch.sh
+        ├── mini_error.sh
+        ├── mini_script_error.py
+        └── script.py
 
 
 #### **Launching the Tutorial**
