@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task 1
 #SBATCH --mem 20G
 #SBATCH --time 4:00:00
-#SBATCH --job-name tile_test_crop
+#SBATCH --job-name mini_test_nogpu
 
 source activate base
 conda init zsh

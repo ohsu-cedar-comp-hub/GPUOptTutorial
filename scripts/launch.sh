@@ -8,9 +8,9 @@
 #SBATCH --time 1:00:00
 #SBATCH --job-name gpu_opt_tut
 
-source activate base
-conda init zsh
-conda activate gigapath
+eval "$(conda shell.bash hook)"
+conda init
+conda activate /home/exacloud/gscratch/CEDAR/chaoe/miniconda3/envs/gigapath
 
 if [ -n "$1" ]; then
   CACHE_ARG="-c \"$1\""

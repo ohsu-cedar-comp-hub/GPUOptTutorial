@@ -82,9 +82,9 @@ class ImageCropTileFilter:
         )
 
     def filter_and_save(self):
-        print("Loading...")
         self.load_gp_tile_encoder()
         self.crop()
+        logging.info("Tiling has begun. ")
 
         tiler = Tiler(data_shape=self.cropped.shape,
                     tile_shape=(256, 256, 3),
@@ -117,11 +117,13 @@ class ImageCropTileFilter:
                     df_transposed['submitter_id'] = self.subid
                     df_transposed['cancer_type'] = self.cancer_type
                     df_transposed['tile_position'] = tile_pos
-                    df_transposed.to_csv(self.output_dir + self.cancer_type + "-emb/" + self.tsv_file_name + ".tsv",
+                    dir_name=self.output_dir + self.cancer_type + "-emb/"                    
+                    os.makedirs(dir_name, exist_ok=True)
+
+                    df_transposed.to_csv(dir_name + self.tsv_file_name + ".tsv",
                                             sep="\t",
                                             mode='a',
-                                            index=False, header=False)  # append row to existing tsv
-                
+                                            index=False, header=False) 
             else:
                 continue 
 
@@ -148,6 +150,7 @@ if __name__ == "__main__":
     logfilename = args.logfilename
     output_dir = args.outputdir
     cache = args.cachelocation
+    os.makedirs(os.path.dirname(logfilename), exist_ok=True)
 
 
     # Configure logging

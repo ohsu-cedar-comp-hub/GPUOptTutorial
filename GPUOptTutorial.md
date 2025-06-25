@@ -1,40 +1,21 @@
 # GPU Optimization Tutorial <!-- omit in toc -->
 
-**Table of Contents**
-- [**Introduction**](#introduction)
-    - [**Background**](#background)
-    - [**Getting Started**](#getting-started)
-    - [**Data Input**](#data-input)
-- [**Running the Tutorial**](#running-the-tutorial)
-    - [**Setting Up**](#setting-up)
-    - [**Pulling the Data**](#pulling-the-data)
-    - [**Launching the Tutorial**](#launching-the-tutorial)
-- [**Tracking and Optimizing the Jobs**](#tracking-and-optimizing-the-jobs)
-    - [**GPU Usage and Optimization**](#gpu-usage-and-optimization)
-    - [**CPU Usage and Optimization**](#cpu-usage-and-optimization)
-- [**Other Information**](#other-information)
-    - [**Detailed Breakdown of Script (script.py)**](#detailed-breakdown-of-script-scriptpy)
-    - [**Why nvidia-smi?**](#why-nvidia-smi)
-    - [**Using LegacyGPU Partition**](#using-legacygpu-partition)
-    - [**Changing Location of Cache**](#changing-location-of-cache)
-    - [**General Tips for Lazy Loading**](#general-tips-for-lazy-loading)
-
-
 ## **Introduction**
 
-#### **Background**
-
-
-
-
+<details>
+  <summary><b>Background</b></summary>
+<br>
 This tutorial is based off of Layaa’s script that splits whole slide images (.svs) into 256 x 256 tiles. Tiles are assessed and those with poor contrast and variation (aka likely background) are filtered out. Remaining tiles’ embeddings and coordinates are ran through the pretrained GigaPath model which will output slide-level embeddings. These embeddings along with the tile’s position are captured in a tsv for future processing. 
-
+<br><br>
 Layaa was running this script on 4 huge datasets, with each dataset containing ~ 1000-3000 images. Images were split into batches of five and each image was very big, with a height and width easily in the range of 15k to over 100k. 
-
+<br><br>
 This script was ran as an SBATCH job and each job was one batch of .svs images. Jobs were submitted using a job array. 
+<br><br>
+</details>
 
-#### **Getting Started**
-
+<details>
+  <summary><b>Getting Started</b></summary>
+<br>
 This tutorial assumes you have conda and you have knowledge on how to pull from a Git repository. 
 
 If you’re unsure, refer to: 
@@ -43,47 +24,49 @@ https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html
 
 https://docs.github.com/en/get-started/using-git/getting-changes-from-a-remote-repository
 
-#### **Data Input** 
+</details>
 
-For the purposes of this tutorial, we have cropped images to a more manageable size of 15k x 15k. We will be using 2 batches with each batch consisting of 2 images to also demonstrate the utility of the job array. An example of what one image looks like is below: 
+
+<details>
+  <summary><b>Data Input</b></summary>
+<br>
+For the purposes of this tutorial, we are using whole-slide images from breast cancer tissue samples. 
+
+We have cropped images to a more manageable size of 15k x 15k pixels. 
+We will be using 2 batches, with each batch consisting of 2 images to also demonstrate the utility of the job array. 
+
+An example of what one image looks like is below: 
 
 ![image.png](assets/example.png)
 
-## **Running the Tutorial**
+</details>
 
-#### **Setting Up**
+## **Preparing to Run Tutorial**
 
-First, you will pull all the files from the GPU Opt github: 
+<details>
+  <summary><b>Obtaining Files and Environment</b></summary>
+<br>
+The steps are as follows: 
 
-```
-git clone https://github.com/ohsu-cedar-comp-hub/GPUOptTutorial.git
-cd GPUOptTutorial
-```
+1. Pull all the files from the GPU Opt github: 
 
-Confirm that your current working directory is the GPUOptTutorial directory. 
+    ```
+    git clone https://github.com/ohsu-cedar-comp-hub/GPUOptTutorial.git
+    cd GPUOptTutorial
+    ```
 
-Now, we will set up the correct environment: 
+2. Confirm that your current working directory is the GPUOptTutorial directory. 
+3. To simplify set up of the correct environment, I put the direct path to my environment in the launch script, `launch.sh` so no need to set it up yourself. 
 
-Follow install instructions from gigapath github README. https://github.com/prov-gigapath/prov-gigapath 
+<br>
 
-Then run this block of code below, making sure to install everything in the same gigapath environment.
+TIP: Want to set up the environment for yourself? Move to **Creating Environment**. 
+</details>
 
-(You may be able to skip uninstalling and reinstalling torch modules if you didn’t run into any issues installing gigapath from github). 
 
-```
-pip uninstall torch torchvision torchaudio
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-
-conda install anaconda::pandas
-conda install conda-forge::timm
-conda install anaconda::tifffile
-pip install tiler
-
-```
-
-#### **Pulling the Data** 
-For this tutorial, we will be using 2 batches of 2 BRCA images with each image being 15k x 15k pixels. 
-Batch 1 is titled TCGA_BRCA-batch_1. Batch 2 is titled TCGA_BRCA-batch_2. 
+<details>
+  <summary><b>Obtaining the Data</b></summary>
+  <br>
 
 Pull the data by creating a symbolic link. 
 
@@ -92,151 +75,63 @@ cd GPUOptTutorial
 ln -s /home/exacloud/gscratch/CEDAR/chaoe/gpu_opt/TCGA-BRCA .
 ```
 
+In the TCGA-BRCA folder, you'll have 3 folders:
+- TCGA_BRCA-batch_1
+- TCGA_BRCA-batch_2 
+- TCGA_BRCA-batch_test
+
+TCGA_BRCA-batch_1 and 2 contain 2 images of 15k x 15k pixels each and will be used for the main tutorial. 
+
+TCGA_BRCA-batch_test contains 1 small image. 
+This image will be used for a small test job in **Why nvidia-smi?: Impact of Not Using Your GPU(s)**. 
+
+
+</details>
+
+<details>
+  <summary><b>Setting the Cache</b></summary>
+<br>
+With HuggingFace, you can specify the cache directory where you want your models to be stored. 
+By default, it is on your head node which is NOT ideal as it results in slower loading time and also takes up more space in your head node which can lead to disk quota exceeded issues! 
+
+As a result, we will do the following: 
+1. Create a new cache directory in gscratch 
+2. Set the full path of cache directory as the HF_HOME variable in your bashrc file. 
+
+    ```
+    cache=/home/exacloud/gscratch/CEDAR/[user]/[cache dir]
+    mkdir -p "$cache"
+
+    nano ~/.bashrc
+        export HF_HOME=/home/exacloud/gscratch/CEDAR/[user]/[cache dir]
+
+    source ~/.bashrc
+    ```
+
+TIP: Want to see more information regarding why I put HF cache in gscratch? Move to **Changing Location of Cache**
+
+
+</details>
+
+<details>
+  <summary><b>Final File Structure </b></summary>
+  <br>
 Now, this is what your file structure should look like when you run 
+
 ```
 cd GPUOptTutorial
 tree
 ```
-    .
-    ├── GPUOptTutorial.md
-    ├── README.md
-    ├── TCGA-BRCA -> /home/exacloud/gscratch/CEDAR/chaoe/gpu_opt/TCGA-BRCA
-    ├── assets
-    │   ├── example.png
-    │   ├── image1.png
-    │   ├── image10.png
-    │   ├── image11.png
-    │   ├── image12.png
-    │   ├── image13.png
-    │   ├── image14.png
-    │   ├── image15.png
-    │   ├── image2.png
-    │   ├── image3.png
-    │   ├── image4.png
-    │   ├── image5.png
-    │   ├── image6.png
-    │   ├── image7.png
-    │   ├── image8.png
-    │   └── image9.png
-    ├── prov-gigapath
-    │   ├── LICENSE
-    │   ├── README.md
-    │   ├── data
-    │   │   └── __init__.py
-    │   ├── dataset_csv
-    │   │   ├── PANDA
-    │   │   │   ├── PANDA.csv
-    │   │   │   ├── test_0.csv
-    │   │   │   ├── train_0.csv
-    │   │   │   └── val_0.csv
-    │   │   ├── mutation
-    │   │   │   └── LUAD-5-gene_TCGA.csv
-    │   │   └── pcam
-    │   │       └── pcam.csv
-    │   ├── demo
-    │   │   ├── 1_slide_mpp_check.py
-    │   │   ├── 2_tiling_demo.py
-    │   │   ├── 3_load_tile_encoder.py
-    │   │   ├── 4_load_slide_encoder.py
-    │   │   ├── gigapath_pca_visualization_timm.ipynb
-    │   │   └── run_gigapath.ipynb
-    │   ├── environment.yaml
-    │   ├── finetune
-    │   │   ├── datasets
-    │   │   │   ├── __init__.py
-    │   │   │   └── slide_datatset.py
-    │   │   ├── main.py
-    │   │   ├── metrics.py
-    │   │   ├── params.py
-    │   │   ├── task_configs
-    │   │   │   ├── mutation_5_gene.yaml
-    │   │   │   ├── panda.yaml
-    │   │   │   └── utils.py
-    │   │   ├── training.py
-    │   │   └── utils.py
-    │   ├── gigapath
-    │   │   ├── __init__.py
-    │   │   ├── classification_head.py
-    │   │   ├── pipeline.py
-    │   │   ├── pos_embed.py
-    │   │   ├── preprocessing
-    │   │   │   ├── __init__.py
-    │   │   │   ├── data
-    │   │   │   │   ├── __init__.py
-    │   │   │   │   ├── box_utils.py
-    │   │   │   │   ├── create_tiles_dataset.py
-    │   │   │   │   ├── foreground_segmentation.py
-    │   │   │   │   ├── slide_utils.py
-    │   │   │   │   └── tiling.py
-    │   │   │   └── preprocessing.md
-    │   │   ├── slide_encoder.py
-    │   │   └── torchscale
-    │   │       ├── __init__.py
-    │   │       ├── architecture
-    │   │       │   ├── __init__.py
-    │   │       │   ├── config.py
-    │   │       │   ├── decoder.py
-    │   │       │   ├── encoder.py
-    │   │       │   ├── encoder_decoder.py
-    │   │       │   ├── retnet.py
-    │   │       │   └── utils.py
-    │   │       ├── component
-    │   │       │   ├── __init__.py
-    │   │       │   ├── custom_dilated_attention.py
-    │   │       │   ├── custom_flash_attention.py
-    │   │       │   ├── custom_multihead_attention.py
-    │   │       │   ├── dilated_attention.py
-    │   │       │   ├── droppath.py
-    │   │       │   ├── embedding.py
-    │   │       │   ├── feedforward_network.py
-    │   │       │   ├── flash_attention.py
-    │   │       │   ├── gate_linear_unit.py
-    │   │       │   ├── multihead_attention.py
-    │   │       │   ├── multiscale_retention.py
-    │   │       │   ├── multiway_network.py
-    │   │       │   ├── relative_position_bias.py
-    │   │       │   ├── rms_norm.py
-    │   │       │   ├── utils.py
-    │   │       │   ├── xmoe
-    │   │       │   │   ├── __init__.py
-    │   │       │   │   ├── global_groups.py
-    │   │       │   │   ├── moe_layer.py
-    │   │       │   │   └── routing.py
-    │   │       │   └── xpos_relative_position.py
-    │   │       └── model
-    │   │           ├── BEiT3.py
-    │   │           ├── LongNet.py
-    │   │           ├── LongNetConfig.py
-    │   │           └── __init__.py
-    │   ├── gigapath.egg-info
-    │   │   ├── PKG-INFO
-    │   │   ├── SOURCES.txt
-    │   │   ├── dependency_links.txt
-    │   │   └── top_level.txt
-    │   ├── images
-    │   │   ├── 01581x_25327y.png
-    │   │   ├── 01581x_25583y.png
-    │   │   ├── GigaPath_embedding_visualization.png
-    │   │   ├── gigapath_overview.png
-    │   │   ├── prov_normal_000_1.png
-    │   │   └── prov_normal_000_1.pt
-    │   ├── linear_probe
-    │   │   └── main.py
-    │   ├── pyproject.toml
-    │   ├── requirements.txt
-    │   └── scripts
-    │       ├── run_panda.sh
-    │       └── run_pcam.sh
-    └── scripts
-        ├── launch.sh
-        ├── mini_error.sh
-        ├── mini_script_error.py
-        └── script.py
+
+</details>
 
 
-#### **Launching the Tutorial**
+## **Launching the Tutorial**
 
-Our launch script is titled launch.sh. We will use these already present sbatch parameters: 
+<details>
+  <summary><b>Launch Script Breakdown</b></summary>
+
+Our launch script is titled `launch.sh`. We will use these already present sbatch parameters: 
 
 ```bash
 #!/bin/bash
@@ -250,47 +145,85 @@ Our launch script is titled launch.sh. We will use these already present sbatch 
 #SBATCH --job-name gpu_opt_tut
 ```
 
-Here we are requesting 1 a40 GPU, 1 CPU, 20G of memory and setting a time limit of 1 hour. We also set up a job array of 2 tasks and we want both to run in parallel. 
+Let's break these parameters down line by line: 
+1. --partition gpu -> We are running on the gpu partition. 
+2. --account CEDAR -> We are using the CEDAR account. 
+3. --gres=gpu:a40:1 -> We are requesting 1 A40 GPU. It is good practice to specify which GPU we want as some partitions have mixed types of GPU. 
+4. --array=1-2%2 -> We are setting up a job array. Syntax goes as follows: [# of total jobs]%[# of jobs ran in parallel]. In this case, we want 2 total jobs and both to run in parallel. 
+5. --cpus-per-task 1 -> This is a simple task and we are also utilizing a GPU so 1 CPU should be enough. 
+6. --mem 20G -> This is an arbitrary memory setting of 20 GB. 
+7. --time 1:00:00 -> This is also an arbitrary timelimit setting of 1 hour. 
+8. --job-name gpu_opt_tut -> We are setting a job name that is relevant and easy to remember if needed later. 
 
-Inside the launch script, we will call the following: 
 
-```bash
+Inside the launch script, it calls the following: 
+
+```bash 
+eval "$(conda shell.bash hook)"
+conda init
+conda activate /home/exacloud/gscratch/CEDAR/chaoe/miniconda3/envs/gigapath
+
+if [ -n "$1" ]; then
+  CACHE_ARG="-c \"$1\""
+else
+  CACHE_ARG=""
+fi
+
 python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -hf 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 -lf log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -o results/ $CACHE_ARG
 ```
 
-We are running the script (script.py) with its required arguments:  
+To quickly break this down: 
+1. We are initializing conda for use in the current Bash shell session.
+2. We are activating my conda environment using a direct path to my environment. 
+4. We are running the script (script.py) with its required arguments:  
 
-The image directory (-id) is TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}. We are using a job array, so there are two image directories we are running in parallel. 
+    The image directory (-id) is TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}. We are using a job array, so there are two image directories we are running in parallel. 
+    
+    The hugging face token (-hf) is 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. 
 
-The hugging face token (-hf) is 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. 
+    The path for the log files (-lf) is log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}.log. 
 
-I’ve also set the path for my log files (-lf) as log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}.log. 
+    The output directory will be results/ . 
 
-I’ve also set an output directory in results/ . 
+    The cache argument will be filled in if it is provided during launch of the shell script. From the above section, we have created a variable $HF_HOME for our new cache directory. 
 
-Lastly, there is a cache argument that can be filled in if it is provided during launch of the shell script. This is for the location of the HuggingFace cache. Through my testing, I like to use a cache directory in my gscratch. If you leave it blank, it will just go to your default which is at RDS! 
+TIP: Want a more detailed breakdown of what’s happening in script.py? Move to **Detailed Breakdown of Script (script.py)**. 
 
-TIP: Want to see more information regarding why I put HF cache in gscratch? Move to [**Changing Location of Cache** ](#changing-location-of-cache)
-
-TIP: Want a more detailed breakdown of what’s happening in script.py? Move to [**Detailed Breakdown of Script (script.py)** ](#detailed-breakdown-of-script-scriptpy). 
-
-
-Now, we will launch the job array by running this command: 
-
-`sbatch scripts/launch.sh [insert cache location here if desired]` . 
+</details>
 
 
-After launching, you can confirm that the job array is functioning properly by using `squeue` and checking the log file. 
+We will launch the job array by running this command: 
+
+`sbatch scripts/launch.sh $HF_HOME` . 
+
+Confirm that the job array is functioning properly by using `squeue -u [user]`. 
+You can also check progress with the log file(s). 
+
+Log files are called log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}.log. 
+
 
 ## **Tracking and Optimizing the Jobs**
 
-Often, we have no idea the amount of resources our jobs need. A good litmus test is to track the usage and efficiencies of the resources requested on a smaller test job. In this case, that is this tutorial. 
+Often, we have no idea the amount of resources our jobs need. A good litmus test is to track the usage and efficiencies of the resources requested on a smaller test job. We will do this in this tutorial. 
 
-#### **GPU Usage and Optimization** 
+<details>
+  <summary><b>GPU Usage and Optimization </b></summary>
+<br>
+While your job is running, follow these steps to view your GPU usage. 
 
-While your job is running, you will need to ssh into the compute node(s) your job is running on and run nvidia-smi. This is a great easy command to confirm that you are using your GPU(s) and to see how much of your GPU(s) are being used. Refer to [**Why Nvidia Smi?** ](#why-nvidia-smi) for a small example of why this is important!
+1. SSH into the compute node(s) your job is running on. Find what compute node(s) by looking at `squeue -u`. 
 
-Use `watch nvidia-smi` to get real time updates as the job ran. 
+    ```
+    ssh cnode-00-00 
+    ```
+
+2. Run nvidia-smi. I like to use watch to get real time updates as the job runs. 
+    ```
+    watch nvidia-smi
+    ```
+
+Refer to **Why nvidia-smi?: Impact of Not Using Your GPU(s)** to learn more and to see a test example of what happens when you don't use the GPU(s) you request. 
+
 
 For example, this is what I saw when I did this a few minutes into my jobs: 
 
@@ -310,11 +243,16 @@ One solution that people default to is to increase the batch size to potentially
 
 TIP: Check if you have slow data loading by using the time module to track it! 
 
-#### **CPU Usage and Optimization** 
+</details>
 
+<details>
+  <summary><b>CPU Usage and Optimization</b></summary>
+<br>
 As mentioned above, GPU efficiency is also heavily dependent on CPU efficiency and optimizing your CPUs are a lot easier! 
+<br><br>
+You can track the usage and efficiency of your CPU(s) from a past job using a handy SLURM job assessment tool that can be obtained here: https://github.com/ohsu-cedar-comp-hub/SlurmStats. 
 
-You can track the usage and efficiency of your CPU(s) from a past job using a handy SLURM job assessment tool that can be obtained here: https://github.com/ohsu-cedar-comp-hub/SlurmStats. This tool also displays time and memory efficiencies. 
+This tool also displays time and memory efficiencies. 
 
 This tool generates a report that allows you to check your CPU, memory and time efficiency. In the case of this tutorial, I got these stats back: 
 
@@ -324,23 +262,88 @@ So from the above, the requested 1 CPU was appropriate. The 20 GB memory request
 
 TIP: A good rule of thumb is to aim for > 50% efficiency! 
 
-This tool is also useful to keep track of how much time the job took (via Elapsed column) and is utilized later when I compared other factors! 
+</details>
 
 ## **Other Information**
 
-#### **Detailed Breakdown of Script (script.py)** 
+<details>
+  <summary><b>Creating Environment</b></summary>
+<br>
+First, ensure you are starting this from an environment with python <= 3.12.2. 
 
-INPUT: Path to Directory of Whole Slide Images (.svs), Hugging Face Token, Path to Log File, Path to Results Directory 
+Next, you will follow the install instructions from the gigapath github README. (https://github.com/prov-gigapath/prov-gigapath )
+
+** NOTE: You do not need to install gigapath on a GPU node as stated in their README. Instead, perform the installation instructions on an interactive node. **
+
+Then run this block of code below, making sure to install everything in the same gigapath environment.
+You should be all set at this point! 
+
+
+**BUT** if you run into a torch pip subprocess error such as this one:
+
+```
+Pip subprocess error:
+error: subprocess-exited-with-error
+
+× python [setup.py](http://setup.py/) egg_info did not run successfully.
+│ exit code: 1
+╰─> [8 lines of output]
+Traceback (most recent call last):
+File "<string>", line 2, in <module>
+File "<pip-setuptools-caller>", line 35, in <module>
+File "/tmp/pip-install-uns2lrhc/flash-attn_f3eee864c5924a33840bca034ff69402/setup.py", line 19, in <module>
+import torch
+File "/home/exacloud/gscratch/CEDAR/chaoe/miniconda3/envs/gigapath_testing_06_23/lib/python3.9/site-packages/torch/**init**.py", line 229, in <module>
+from torch._C import *  # noqa: F403
+ImportError: /home/exacloud/gscratch/CEDAR/chaoe/miniconda3/envs/gigapath_testing_06_23/lib/python3.9/site-packages/torch/lib/libtorch_cpu.so: undefined symbol: iJIT_NotifyEvent
+[end of output]
+
+note: This error originates from a subprocess, and is likely not a problem with pip.
+error: metadata-generation-failed
+
+× Encountered error while generating package metadata.
+╰─> See above for output.
+
+note: This is an issue with the package mentioned above, not pip.
+hint: See above for details.
+
+failed
+
+CondaEnvException: Pip failed
+
+```
+
+You will need to uninstall and reinstall fresh torch modules and add in the packages that were missed.  
+
+
+```
+pip uninstall torch torchvision torchaudio
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+conda install anaconda::pandas
+conda install conda-forge::timm
+conda install anaconda::tifffile
+pip install tiler
+
+```
+
+</details>
+
+<details>
+  <summary><b>Detailed Breakdown of Script (script.py)</b></summary>
+<br>
+
+**INPUT:** Path to Directory of Whole Slide Images (.svs), Hugging Face Token, Path to Log File, Path to Results Directory, Path to Cache Directory
 
     For each image in the image directory: 
 
-        New ImageCropTileFilter object is created. 
+        1. New ImageCropTileFilter object is created. 
 
         - Image is read in using Tifffile library.
         - Time taken to read image is printed to log file.
         - Obtain information of the cancer type, image file name, sub id etc from the image file name.
 
-        Load the gigapath model using the hugging face token. 
+        2. Load the gigapath model using the hugging face token and the cache directory. 
 
         - Time taken to load model is printed to log file.
         - Explicitly set torch device to cuda.
@@ -350,15 +353,15 @@ INPUT: Path to Directory of Whole Slide Images (.svs), Hugging Face Token, Path 
             - converts image into PyTorch tensor
             - normalizes RGB using predetermined mean and standard deviation
 
-        Crop the image to ensure its dimensions are divisible by 256. 
+        3. Crop the image to ensure its dimensions are divisible by 256. 
 
-        Tile the image into 256 x 256 tiles. 
+        4. Tile the image into 256 x 256 tiles. 
 
-        For each tile: 
+        5. For each tile: 
 
             Record the tile’s position coordinates in the image. 
 
-            Record the number of unique pixel values in the tile and their occurrences as an array. 
+            Record the number of unique pixel values in the tile and their occurrences as array. 
 
             Calculate the 5th percentile and 50th percentile of pixel values. 
 
@@ -380,49 +383,88 @@ INPUT: Path to Directory of Whole Slide Images (.svs), Hugging Face Token, Path 
 
             If likely background, tile is ignored and not saved. 
 
-OUTPUT: Log File, Dataframe of Processed (Likely Tissue) Tiles 
+**OUTPUT:** Log File, Dataframe of Processed (Likely Tissue) Tiles 
 
-#### **Why nvidia-smi?** 
 
+</details>
+
+<details>
+  <summary><b>Why nvidia-smi?: Impact of Not Using Your GPU(s)</b></summary>
+<br>
 When running a job that requires a GPU, it is imperative to confirm that you are actually using your GPU(s)! 
 
-To demonstrate this, I’ve taken the original script and modified it slightly so that it won’t use the GPU as the pytorch tensor isn’t explicitly switched to cuda. This new script is called mini_script_error.py with the launch script being mini_error.sh. 
+Let's run a small test job where we won't use the GPU and see what happens! 
 
-I’m only using one image, with size of 5k x 5k as input as I expect this job to take a lot longer. 
+I've selected a very small test image with size of 2.5k x 2.5k as input so that this job can be ran in one sitting even without GPU. 
 
-I launched using `sbatch scripts/mini_error.sh`
+This image is in TCGA_BRCA-batch_test. 
 
-After submitting the job, confirming using `squeue`, I ran `watch nvidia-smi` to track GPU usage and as you can see below, no GPU was being utilized. 
+
+![image.png](assets/image16.png)
+
+
+Run the below: 
+
+```
+sbatch scripts/mini_error.sh $HF_HOME 
+
+```
+The launch script and the py script it calls ,`mini_script_error.py`, are identical to `launch.sh` and `script.py` except for one key line where the pytorch tensor is NOT explicitly switched to cuda. 
+Now, do the following: 
+1. Use `squeue -u [user]` to confirm that the job ran and to find the compute node its on. 
+2. Do `ssh cnode-x-x` and then `watch nvidia-smi` to track GPU usage and see if GPU is being utilized.
+
+I've included what I saw below! As you can see, no running processes were found and there was consistently 0% GPU utilization because the GPU was not being used. 
 
 ![image.png](assets/image4.png)
 
 The job was still able to complete, it just took a lot longer than it would have! 
 
-The job took around 15 minutes, while with GPU, it would have taken only 43 seconds! 
+Let's compare by running this same image on the correct launch script and py script. 
+
+To do so: 
+1. Comment out the existing python call line and replace with 
+    ```
+    python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_test -hf 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 -lf log/TCGA-BRCA/TCGA-BRCA-batch_testing -o results/ $CACHE_ARG
+    ```
+2. Remobve the SBATCH job array parameter as we do not need a job array for this single image. 
+
+3. Now run: 
+    ```
+    sbatch scripts/script.sh $HF_HOME 
+
+    ```
+
+Use the Slurm Stats Tool previously mentioned to compare the time elapsed! 
+
+The job took around 4 1/2 minutes, while with GPU, it would have taken only 27 seconds! 
 
 ![image.png](assets/image5.png)
 
-Since the job was still able to finish with only CPU, it may not have raised any suspicion that it wasn’t using GPU. But, it would have been a lot faster if it had! This is why it’s important to ensure that the resources we request are actually being used! 
+Since the job was so small and was still able to finish with only CPU, it may not have raised any suspicion that it wasn’t using GPU. But, it would have been a lot faster if it had! This is why it’s important to ensure that the resources we request are actually being used! 
 
 If this small image was expanded back to its original whole slide image size, we can quickly see just how drastic the difference between using only the CPU and using both the CPU and GPU is! The difference is even more drastic if we imagine that we have a full dataset of this image to process! 
 
-For the full dataset, it is 622 batches of 5 images. These numbers were chosen to directly match the number of BRCA images Layaa had. 
+The full dataset consists of 622 batches of 5 images. These numbers were chosen to directly match the number of BRCA images Layaa had. 
 
 ![image.png](assets/image6.png)
 
 This visual is under two assumptions: 
 
-1. As the small image is expanded back, the computation time and real time it takes increases proportionally to the new image size. 
+1. As the small image is expanded back, the computation time it takes increases proportionally to the new image size. 
 2. All images in each batch and in the entire BRCA dataset are the same. 
 
-While these assumptions indicate that the RT (real time) and CT (computation time) are likely exaggerated, this visual still gives a good look at how drastic a 20x difference can be when you apply it to your real workflow. 
+While these assumptions result in a likely exaggerated CT (computation time), this visual still gives a good look at how drastic a 10x difference can be when you apply it to your real workflow. 
 
-This difference was only 20x for this analysis but could very much be a lot more depending on how busy the cluster is, your analysis and the data you’re working with!
+This difference was only 10x for this analysis but could  be a lot more depending on how busy the cluster is, what your analysis is and how big the data is!
 
 It is highly recommended to use a small test job to start off with to test that the script runs and that the resources requested are being used!
 
-#### **Using LegacyGPU Partition** 
+</details>
 
+<details>
+  <summary><b>Using LegacyGPU Partition</b></summary>
+<br>
 Because this tutorial is not computationally intensive, I wanted to test the effect of using a less powerful gpu via the legacygpu partition. 
 
 Below, is an output I see when I run `watch nvidia-smi`  . 
@@ -451,13 +493,19 @@ Alternatively, it could be useful to start off running your job on the legacyGPU
 
 TIP: To check how busy these partitions are, use sinfo!
 
-#### **Changing Location of Cache**
+</details>
 
-The huggingface cache by default is present in your RDS at /home/users/yourname/.cache/huggingface/hub. 
+<details name="change-cache">
+  <summary><b>Changing Location of Cache</b></summary>
 
-You can change where you want the cache to be when you first load in the model so what would happen if the cache was located in gscratch? 
+<br>
+The huggingface cache by default is present in your head node at /home/users/[yourname]/.cache/huggingface/hub. 
 
-Testing with the gpu partition first, we use the time module to track the loading difference and we can view it in the log files. 
+You can change where you want the cache to be when you first load in the model and I propose putting the cache in your gscratch. 
+
+There are 2 main reasons: faster loading speed from gscratch and to prevent the cache from filling up your disk quota. 
+
+I tested whether it truly provides faster loading speed by using the time module to track the loading difference. 
 
 First from loading with the default, we can see that loading the model for the first time takes 53 seconds and then the second time it takes around 14 seconds. 
 
@@ -475,12 +523,16 @@ Again, loading from the default takes almost a minute and a half the first time.
 
 ![image.png](assets/image15.png)
 
-NOTE: Take the time saved here with a grain of salt. How much faster it is to load on gscratch is heavily dependent on how busy RDS is at a given time. The busier RDS is, the longer it takes to load in RDS, and so loading on gscratch can be a lot faster in comparison. 
+NOTE: Take the time saved here with a grain of salt. How much faster it is to load on gscratch is heavily dependent on how busy the head node is at a given time. The busier the head node is, the longer it takes to load, and so loading on gscratch can be a lot faster in comparison. 
 
 Nonetheless, gscratch is a space dedicated for fast loading and access of data, so it’s good practice to put your HF cache here. 
 
-#### **General Tips for Lazy Loading** 
+</details>
 
+
+<details>
+  <summary><b>General Tips for Lazy Loading</b></summary>
+<br>
 Depending on the project and the data used, you can speed up the data loading. 
 
 For images, if you already know the coordinates of the portions you need, you can load in just the portions of the images you need rather than the entire image. To find the coordinates, you can use software like ImageJ to load the image first. 
@@ -490,3 +542,6 @@ For example, if you have the polygon coordinates of the gland of interest, you c
 In general, it is best for images to be saved as .ome.tiff as this format saves the image as multiple blocks and is therefore easier to lazy load. 
 
 Other good file formats are .h5 and .anndata.
+
+
+</details>

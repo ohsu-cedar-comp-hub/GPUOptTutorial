@@ -24,7 +24,6 @@ class ImageCropTileFilter:
         self.img = imread(imageLoc)
         end = time.time()
         logging.info(f"Time to Load Image: {end - start}")
-        print("Image is read")
         self.h, self.w, self.channels = self.img.shape
         self.hf_token = hf_token
         # self.total_pixels = self.w * self.h
@@ -71,7 +70,7 @@ class ImageCropTileFilter:
         end = time.time()
         logging.info(f"Time for Loading Model: {end - start}")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(self.device)
+        logging.info(f"Torch device is set to {self.device}")
         self.tile_encoder.to(self.device)
 
 
@@ -85,9 +84,9 @@ class ImageCropTileFilter:
         )
 
     def filter_and_save(self):
-        print("Loading...")
         self.load_gp_tile_encoder()
         self.crop()
+        logging.info("Tiling has begun. ")
 
         tiler = Tiler(data_shape=self.cropped.shape,
                     tile_shape=(256, 256, 3),
