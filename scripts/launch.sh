@@ -12,12 +12,29 @@ eval "$(conda shell.bash hook)"
 conda init
 conda activate /home/exacloud/gscratch/CEDAR/chaoe/miniconda3/envs/gigapath
 
-if [ -n "$1" ]; then
-  CACHE_ARG="-c \"$1\""
-else
-  CACHE_ARG=""
+CACHE=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -c)
+            CACHE="$2"
+            shift 2
+            ;;
+        -hf)
+            HF_TOKEN="$2"
+            shift 2
+            ;;
+        *)
+            echo "Incorrect option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -z "$HF_TOKEN" ]]; then
+    echo "Error: HuggingFace token (-hf) is required."
+    exit 1
 fi
 
 
-python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -hf 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 -lf log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -o results/ $CACHE_ARG
+python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -hf $HF_TOKEN -lf log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -o results/ -c $CACHE
 

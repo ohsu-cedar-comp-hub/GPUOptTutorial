@@ -1,4 +1,4 @@
-# GPU Optimization Tutorial <!-- omit in toc -->
+# GPU Optimization Tutorial 
 
 ## **Introduction**
 
@@ -46,6 +46,8 @@ An example of what one image looks like is below:
 <details>
   <summary><b>Obtaining Files and Environment</b></summary>
 <br>
+Please do all of this in gscratch! 
+
 The steps are as follows: 
 
 1. Pull all the files from the GPU Opt github: 
@@ -68,10 +70,9 @@ TIP: Want to set up the environment for yourself? Move to **Creating Environment
   <summary><b>Obtaining the Data</b></summary>
   <br>
 
-Pull the data by creating a symbolic link. 
+Pull the data into GPUOptTutorial directory by creating a symbolic link. 
 
 ```
-cd GPUOptTutorial
 ln -s /home/exacloud/gscratch/CEDAR/chaoe/gpu_opt/TCGA-BRCA .
 ```
 
@@ -89,17 +90,33 @@ This image will be used for a small test job in **Why nvidia-smi?: Impact of Not
 </details>
 
 <details>
+  <summary><b>Obtaining HuggingFace Token</b></summary>
+<br>
+You will need an individual user token in order to access the pretrained Gigapath models in HuggingFace. 
+
+1. Create an account in HuggingFace if you don't already have one. (https://huggingface.co)
+2. Get access to the Gigapath models by accepting the conditions here: https://huggingface.co/prov-gigapath/prov-gigapath. 
+3. Go to Settings and Access Tokens to create a new user token. 
+
+    **Make sure that you enable read access to contents of all public gated repos you can access.**
+
+4. Keep your generated user token elsewhere so you can use it in this tutorial. 
+
+</details>
+
+
+<details>
   <summary><b>Setting the Cache</b></summary>
 <br>
 With HuggingFace, you can specify the cache directory where you want your models to be stored. 
 By default, it is on your head node which is NOT ideal as it results in slower loading time and also takes up more space in your head node which can lead to disk quota exceeded issues! 
 
 As a result, we will do the following: 
-1. Create a new cache directory in gscratch 
+1. Create a new cache directory in your GPUOptTutorial directory (in gscratch). 
 2. Set the full path of cache directory as the HF_HOME variable in your bashrc file. 
 
     ```
-    cache=/home/exacloud/gscratch/CEDAR/[user]/[cache dir]
+    cache=/home/exacloud/gscratch/CEDAR/[user]/GPUOptTutorial/[cache dir]
     mkdir -p "$cache"
 
     nano ~/.bashrc
@@ -130,6 +147,7 @@ tree
 
 <details>
   <summary><b>Launch Script Breakdown</b></summary>
+<br>
 
 Our launch script is titled `launch.sh`. We will use these already present sbatch parameters: 
 
@@ -149,7 +167,7 @@ Let's break these parameters down line by line:
 1. --partition gpu -> We are running on the gpu partition. 
 2. --account CEDAR -> We are using the CEDAR account. 
 3. --gres=gpu:a40:1 -> We are requesting 1 A40 GPU. It is good practice to specify which GPU we want as some partitions have mixed types of GPU. 
-4. --array=1-2%2 -> We are setting up a job array. Syntax goes as follows: [# of total jobs]%[# of jobs ran in parallel]. In this case, we want 2 total jobs and both to run in parallel. 
+4. --array=1-2%2 -> We are setting up a job array. Syntax goes as follows: [range of jobs]%[# of jobs ran in parallel]. In this case, we want 2 total jobs so 1-2 and we want both to run in parallel. 
 5. --cpus-per-task 1 -> This is a simple task and we are also utilizing a GPU so 1 CPU should be enough. 
 6. --mem 20G -> This is an arbitrary memory setting of 20 GB. 
 7. --time 1:00:00 -> This is also an arbitrary timelimit setting of 1 hour. 
@@ -159,42 +177,64 @@ Let's break these parameters down line by line:
 Inside the launch script, it calls the following: 
 
 ```bash 
+
 eval "$(conda shell.bash hook)"
 conda init
 conda activate /home/exacloud/gscratch/CEDAR/chaoe/miniconda3/envs/gigapath
 
-if [ -n "$1" ]; then
-  CACHE_ARG="-c \"$1\""
-else
-  CACHE_ARG=""
+CACHE=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -c)
+            CACHE="$2"
+            shift 2
+            ;;
+        -hf)
+            HF_TOKEN="$2"
+            shift 2
+            ;;
+        *)
+            echo "Incorrect option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -z "$HF_TOKEN" ]]; then
+    echo "Error: HuggingFace token (-hf) is required."
+    exit 1
 fi
 
-python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -hf 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 -lf log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -o results/ $CACHE_ARG
+
+python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -hf $HF_TOKEN -lf log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID} -o results/ -c $CACHE
+
+
 ```
 
 To quickly break this down: 
 1. We are initializing conda for use in the current Bash shell session.
 2. We are activating my conda environment using a direct path to my environment. 
+3. The user-specific hugging face token (-hf) and the cache directory (-c) arguments are expected to be given during launch of script to be used in script.py. 
 4. We are running the script (script.py) with its required arguments:  
 
     The image directory (-id) is TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}. We are using a job array, so there are two image directories we are running in parallel. 
     
-    The hugging face token (-hf) is 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. 
+    The hugging face token (-hf) is user-specific and provided during launch of script. It was previously generated in an earlier section. 
 
     The path for the log files (-lf) is log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}.log. 
 
     The output directory will be results/ . 
 
-    The cache argument will be filled in if it is provided during launch of the shell script. From the above section, we have created a variable $HF_HOME for our new cache directory. 
+    The cache argument will be filled in if it is provided during launch of script. We had previously created a variable $HF_HOME that is our new cache directory. 
 
 TIP: Want a more detailed breakdown of what’s happening in script.py? Move to **Detailed Breakdown of Script (script.py)**. 
 
 </details>
-
+<br>
 
 We will launch the job array by running this command: 
 
-`sbatch scripts/launch.sh $HF_HOME` . 
+`sbatch scripts/launch.sh -c $HF_HOME -hf [usertoken]` . 
 
 Confirm that the job array is functioning properly by using `squeue -u [user]`. 
 You can also check progress with the log file(s). 
@@ -204,7 +244,7 @@ Log files are called log/TCGA-BRCA/TCGA-BRCA-batch_${SLURM_ARRAY_TASK_ID}.log.
 
 ## **Tracking and Optimizing the Jobs**
 
-Often, we have no idea the amount of resources our jobs need. A good litmus test is to track the usage and efficiencies of the resources requested on a smaller test job. We will do this in this tutorial. 
+Often, we have no idea the amount of resources our jobs need. A good litmus test is to track the usage and efficiencies of the resources requested on a smaller test job. This is exactly what we are doing in this tutorial. 
 
 <details>
   <summary><b>GPU Usage and Optimization </b></summary>
@@ -273,7 +313,7 @@ First, ensure you are starting this from an environment with python <= 3.12.2.
 
 Next, you will follow the install instructions from the gigapath github README. (https://github.com/prov-gigapath/prov-gigapath )
 
-** NOTE: You do not need to install gigapath on a GPU node as stated in their README. Instead, perform the installation instructions on an interactive node. **
+**NOTE**: You should NOT install gigapath on a GPU node as stated in their README. Instead, perform the installation instructions on an interactive node.
 
 Then run this block of code below, making sure to install everything in the same gigapath environment.
 You should be all set at this point! 
@@ -406,7 +446,7 @@ This image is in TCGA_BRCA-batch_test.
 Run the below: 
 
 ```
-sbatch scripts/mini_error.sh $HF_HOME 
+sbatch scripts/mini_error.sh -c $HF_HOME -hf [usertoken]
 
 ```
 The launch script and the py script it calls ,`mini_script_error.py`, are identical to `launch.sh` and `script.py` except for one key line where the pytorch tensor is NOT explicitly switched to cuda. 
@@ -425,7 +465,7 @@ Let's compare by running this same image on the correct launch script and py scr
 To do so: 
 1. Comment out the existing python call line and replace with 
     ```
-    python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_test -hf 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 -lf log/TCGA-BRCA/TCGA-BRCA-batch_testing -o results/ $CACHE_ARG
+    python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_test -hf $HF_TOKEN  -lf log/TCGA-BRCA/TCGA-BRCA-batch_testing -o results/ -c $CACHE
     ```
 2. Remobve the SBATCH job array parameter as we do not need a job array for this single image. 
 

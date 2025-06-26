@@ -59,7 +59,7 @@ class ImageCropTileFilter:
 
     def load_gp_tile_encoder(self):
         os.environ["HF_TOKEN"] = self.hf_token
-        if self.cache is not None: 
+        if self.cache is not None and self.cache != '': 
             
             os.environ['HF_HOME'] = self.cache
             os.environ["HUGGINGFACE_HUB_CACHE"] = self.cache 
