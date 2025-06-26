@@ -131,15 +131,46 @@ TIP: Want to see more information regarding why I put HF cache in gscratch? Move
 </details>
 
 <details>
-  <summary><b>Final File Structure </b></summary>
+  <summary><b>Final Directory Structure </b></summary>
   <br>
-Now, this is what your file structure should look like when you run 
+Now, this is what your directory structure should look like when you run: 
 
 ```
 cd GPUOptTutorial
 tree
 ```
 
+```
+.
+├── README.md
+├── TCGA-BRCA -> /home/exacloud/gscratch/CEDAR/chaoe/gpu_opt/TCGA-BRCA
+├── assets
+│   ├── example.png
+│   ├── image1.png
+│   ├── image10.png
+│   ├── image11.png
+│   ├── image12.png
+│   ├── image13.png
+│   ├── image14.png
+│   ├── image15.png
+│   ├── image16.png
+│   ├── image2.png
+│   ├── image3.png
+│   ├── image4.png
+│   ├── image5.png
+│   ├── image6.png
+│   ├── image7.png
+│   ├── image8.png
+│   └── image9.png
+├── cache
+└── scripts
+    ├── launch.sh
+    ├── mini_error.sh
+    ├── mini_script_error.py
+    └── script.py
+
+
+```
 </details>
 
 
