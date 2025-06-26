@@ -46,13 +46,14 @@ An example of what one image looks like is below:
 <details>
   <summary><b>Obtaining Files and Environment</b></summary>
 <br>
-Please do all of this in gscratch! 
+
 
 The steps are as follows: 
 
 1. Pull all the files from the GPU Opt github: 
 
     ```
+    cd /home/exacloud/gscratch/CEDAR/[user]
     git clone https://github.com/ohsu-cedar-comp-hub/GPUOptTutorial.git
     cd GPUOptTutorial
     ```
