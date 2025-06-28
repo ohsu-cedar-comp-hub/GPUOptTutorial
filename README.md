@@ -165,6 +165,7 @@ tree
 │   └── image9.png
 ├── cache
 └── scripts
+    ├── fix_mini_error.sh
     ├── launch.sh
     ├── mini_error.sh
     ├── mini_script_error.py
@@ -325,6 +326,14 @@ As mentioned above, GPU efficiency is also heavily dependent on CPU efficiency a
 You can track the usage and efficiency of your CPU(s) from a past job using a handy SLURM job assessment tool that can be obtained here: https://github.com/ohsu-cedar-comp-hub/SlurmStats. 
 
 This tool also displays time and memory efficiencies. 
+
+```
+cd /home/exacloud/gscratch/CEDAR/[user]
+git clone https://github.com/ohsu-cedar-comp-hub/SlurmStats.git
+cd SlurmStats
+./JobAssess.sh -u [user] -s [today in YYYY-MM-DD]
+
+```
 
 This tool generates a report that allows you to check your CPU, memory and time efficiency. In the case of this tutorial, I got these stats back: 
 
@@ -492,22 +501,18 @@ I've included what I saw below! As you can see, no running processes were found 
 
 The job was still able to complete, it just took a lot longer than it would have! 
 
-Let's compare by running this same image on the correct launch script and py script. 
-
-To do so: 
-1. Comment out the existing python call line and replace with 
-    ```
-    python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_test -hf $HF_TOKEN  -lf log/TCGA-BRCA/TCGA-BRCA-batch_testing -o results/ -c $CACHE
-    ```
-2. Remobve the SBATCH job array parameter as we do not need a job array for this single image. 
-
-3. Now run: 
-    ```
-    sbatch scripts/script.sh $HF_HOME 
-
-    ```
+Let's compare by running this same image on the correct py script. 
+Do this by running: 
+```
+sbatch scripts/fix_mini_error.sh -c $HF_HOME -hf [usertoken]
+```
 
 Use the Slurm Stats Tool previously mentioned to compare the time elapsed! 
+
+```
+cd /home/exacloud/gscratch/CEDAR/[user]/SlurmStats
+./JobAssess.sh -u [user] -s [today in YYYY-MM-DD]
+```
 
 The job took around 4 1/2 minutes, while with GPU, it would have taken only 27 seconds! 
 

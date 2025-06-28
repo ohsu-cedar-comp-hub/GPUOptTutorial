@@ -5,8 +5,7 @@
 #SBATCH --cpus-per-task 1
 #SBATCH --mem 20G
 #SBATCH --time 4:00:00
-#SBATCH --job-name mini_test_nogpu
-
+#SBATCH --job-name mini_test_wgpu
 
 eval "$(conda shell.bash hook)"
 conda init
@@ -35,5 +34,5 @@ if [[ -z "$HF_TOKEN" ]]; then
     exit 1
 fi
 
-python scripts/mini_script_error.py -id TCGA-BRCA/TCGA-BRCA-batch_test -hf $HF_TOKEN -lf log/TCGA-BRCA/TCGA-BRCA-test_nogpu -o results/ -c $CACHE
+python scripts/script.py -id TCGA-BRCA/TCGA-BRCA-batch_test -hf $HF_TOKEN -lf log/TCGA-BRCA/TCGA-BRCA-test_wgpu -o results/ -c $CACHE
 

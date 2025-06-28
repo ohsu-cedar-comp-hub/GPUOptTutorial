@@ -68,7 +68,6 @@ class ImageCropTileFilter:
         logging.info(f"Time for Loading Model: {end - start}")
         #self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #print(torch.cuda.current_device)
-        #pdb.set_trace()
         #self.tile_encoder.to(self.device)
 
 
