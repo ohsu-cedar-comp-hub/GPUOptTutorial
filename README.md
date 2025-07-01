@@ -53,6 +53,8 @@ The steps are as follows:
 1. Pull all the files from the GPU Opt github: 
 
     ```
+    srun --time=2:00:00 --mem=20G --partition=interactive --pty /usr/bin/bash
+
     cd /home/exacloud/gscratch/CEDAR/[user]
     git clone https://github.com/ohsu-cedar-comp-hub/GPUOptTutorial.git
     cd GPUOptTutorial
@@ -330,7 +332,7 @@ This tool also displays time and memory efficiencies.
 ```
 cd /home/exacloud/gscratch/CEDAR/[user]
 git clone https://github.com/ohsu-cedar-comp-hub/SlurmStats.git
-cd SlurmStats
+cd SlurmStats/SlurmTools
 ./JobAssess.sh -u [user] -s [today in YYYY-MM-DD]
 
 ```
@@ -510,7 +512,7 @@ sbatch scripts/fix_mini_error.sh -c $HF_HOME -hf [usertoken]
 Use the Slurm Stats Tool previously mentioned to compare the time elapsed! 
 
 ```
-cd /home/exacloud/gscratch/CEDAR/[user]/SlurmStats
+cd /home/exacloud/gscratch/CEDAR/[user]/SlurmStats/SlurmTools
 ./JobAssess.sh -u [user] -s [today in YYYY-MM-DD]
 ```
 
