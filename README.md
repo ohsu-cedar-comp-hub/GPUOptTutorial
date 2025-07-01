@@ -123,7 +123,7 @@ As a result, we will do the following:
     mkdir -p "$cache"
 
     nano ~/.bashrc
-        export HF_HOME=/home/exacloud/gscratch/CEDAR/[user]/[cache dir]
+        export HF_HOME=/home/exacloud/gscratch/CEDAR/[user]/GPUOptTutorial/[cache dir]
 
     source ~/.bashrc
     ```
